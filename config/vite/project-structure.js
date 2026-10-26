@@ -24,9 +24,14 @@ let projectStructureCache = new WeakMap();
 /** @type {object|null} */
 let defaultProjectStructureCache = null;
 
-/** Strip a JS, JSX, or SCSS extension from an output key. */
+/**
+ * Strip a JS, JSX, SCSS, or CSS extension from an output key.
+ *
+ * CSS only reaches entry keys when `styles.cssEntries` is enabled, so matching
+ * it here is inert for projects that keep the SCSS-only default.
+ */
 const stripAssetExtension = (filePath) =>
-  filePath.replace(/\.(scss|jsx?)$/i, '');
+  filePath.replace(/\.(s?css|jsx?)$/i, '');
 
 /** Insert "/css|js" bucket unless SDC=true; strip extension. */
 export function injectBucket(rel, bucket, SDC) {
@@ -34,7 +39,7 @@ export function injectBucket(rel, bucket, SDC) {
   if (SDC) {
     return bucket === 'css' ? `${withoutExt}__style` : withoutExt;
   }
-  return replaceLastSlash(rel, `/${bucket}/`).replace(/\.(scss|jsx?)$/i, '');
+  return stripAssetExtension(replaceLastSlash(rel, `/${bucket}/`));
 }
 
 /**
@@ -221,6 +226,7 @@ function normalizeAssetRoots(projectDir, assetRoots = []) {
  *   ignoredAssetRoots?: string[],
  *   assetRebase?: boolean,
  *   selfContainedOutput?: boolean,
+ *   cssEntries?: boolean,
  *   platformAdapter?: object
  * }} [env] - Normalized project environment.
  * @returns {object} Project structure model.
@@ -249,6 +255,7 @@ export function resolveProjectStructure(env) {
     ignoredAssetRoots = [],
     assetRebase = true,
     selfContainedOutput = true,
+    cssEntries = false,
     platformAdapter = {},
   } = resolvedEnv;
   const structureImplementations =
@@ -317,6 +324,7 @@ export function resolveProjectStructure(env) {
     assetRoots,
     assetRebase: assetRebase !== false,
     selfContainedOutput: selfContainedOutput !== false,
+    cssEntries: cssEntries === true,
     sourceRoots,
     ignoredAssetRoots: unique(ignoredAssetRoots),
     sourceRootRecords,
@@ -421,7 +429,7 @@ export function compiledAssetOutputPath(filePath, type, structure, ctx) {
 }
 
 /**
- * Resolve an output key for Storybook/component-library SCSS.
+ * Resolve an output key for Storybook/component-library styles.
  *
  * @param {string} filePath - Absolute source file path.
  * @param {object} structure - Project structure model.
@@ -438,7 +446,7 @@ export function storybookStyleOutputPath(filePath, structure, ctx) {
         : relativeFrom(filePath, sourceRoot?.directory || ctx.srcDir)
       : relFromSrc;
 
-  return `${structure.output.storybook}/${rel.replace(/\.scss$/i, '')}`;
+  return `${structure.output.storybook}/${rel.replace(/\.s?css$/i, '')}`;
 }
 
 /**

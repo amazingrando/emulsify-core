@@ -332,6 +332,49 @@ describe('asset resolver', () => {
     ]);
   });
 
+  it('treats source-root css as authored when styles.cssEntries is on', () => {
+    // Mirrored Drupal output keeps compiled CSS at the project root with an
+    // exact match; the authored CSS entry under src/ only matches by filename.
+    const files = {
+      'components/card/card.css': '.b{background:url(../images/bg.png)}',
+      'src/components/card/card.css': [
+        '.card {',
+        '  background: url(var(--bg, bg.png));',
+        '}',
+      ].join('\n'),
+    };
+    withProject(files);
+    const projectStructure = {
+      cssEntries: true,
+      sourceRoots: [join(projectDir, 'src/components')],
+    };
+
+    expect(
+      createAssetResolver({ projectDir, projectStructure }).references(
+        '../images/bg.png',
+      ),
+    ).toEqual([
+      {
+        file: 'card/card.css',
+        sourceFile: 'src/components/card/card.css',
+        line: 2,
+      },
+    ]);
+    // Without the flag the same source is compiled-tier, so the exact match wins.
+    expect(
+      createAssetResolver({
+        projectDir,
+        projectStructure: { ...projectStructure, cssEntries: false },
+      }).references('../images/bg.png'),
+    ).toEqual([
+      {
+        file: 'card/card.css',
+        sourceFile: 'components/card/card.css',
+        line: 1,
+      },
+    ]);
+  });
+
   it('still reports compiled css when there is no authored source', () => {
     const resolver = withProject({
       'components/style.css': '.b{background:url(../images/bg.png)}',

@@ -520,6 +520,44 @@ describe('resolveProjectConfig', () => {
     expect(env.projectStructure.assetRoots).toEqual(expectedRoots);
   });
 
+  it('leaves plain CSS style entries off by default', () => {
+    projectDir = makeTempProject();
+    writeProjectConfig(projectDir, {
+      project: { platform: 'none' },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.cssEntries).toBe(false);
+    expect(env.projectStructure.cssEntries).toBe(false);
+  });
+
+  it('reads styles.cssEntries from project config', () => {
+    projectDir = makeTempProject();
+    writeProjectConfig(projectDir, {
+      project: { platform: 'none' },
+      styles: { cssEntries: true },
+    });
+
+    const env = resolveProjectConfig(projectDir, {});
+
+    expect(env.cssEntries).toBe(true);
+    expect(env.projectStructure.cssEntries).toBe(true);
+  });
+
+  it.each(['true', 1, {}])(
+    'ignores non-boolean styles.cssEntries value %p',
+    (value) => {
+      projectDir = makeTempProject();
+      writeProjectConfig(projectDir, {
+        project: { platform: 'none' },
+        styles: { cssEntries: value },
+      });
+
+      expect(resolveProjectConfig(projectDir, {}).cssEntries).toBe(false);
+    },
+  );
+
   it('keeps build output self-contained by default', () => {
     projectDir = makeTempProject();
     writeProjectConfig(projectDir, {

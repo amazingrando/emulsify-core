@@ -150,6 +150,20 @@ function resolveSelfContainedOutput(rawConfig = {}, env = {}) {
 }
 
 /**
+ * Resolve whether plain `.css` files compile as style entries beside `.scss`.
+ *
+ * Off by default for 4.x compatibility: existing projects may keep raw `.css`
+ * in source roots and rely on it being copied verbatim to the output. Only a
+ * literal `true` enables it so a stray string value cannot change the build.
+ *
+ * @param {object} rawConfig - Parsed project.emulsify.json contents.
+ * @returns {boolean} TRUE when `.css` files are compiled entries.
+ */
+function resolveCssEntries(rawConfig = {}) {
+  return rawConfig?.styles?.cssEntries === true;
+}
+
+/**
  * Normalize variant structure implementation declarations.
  *
  * @param {string} projectDir - Absolute project root.
@@ -297,6 +311,7 @@ export function resolveProjectConfig(
   const assetRoots = normalizeAssetRoots(root, rawAssetRoots(rawConfig));
   const assetRebase = resolveAssetRebase(rawConfig, env);
   const selfContainedOutput = resolveSelfContainedOutput(rawConfig, env);
+  const cssEntries = resolveCssEntries(rawConfig);
   const structureRoots = structureImplementations.map(
     (implementation) => implementation.directory,
   );
@@ -310,6 +325,7 @@ export function resolveProjectConfig(
     ignoredAssetRoots: assetRoots.ignored,
     assetRebase,
     selfContainedOutput,
+    cssEntries,
     platformAdapter,
   });
 
@@ -331,6 +347,7 @@ export function resolveProjectConfig(
     ignoredAssetRoots: projectStructure.ignoredAssetRoots,
     assetRebase: projectStructure.assetRebase,
     selfContainedOutput: projectStructure.selfContainedOutput,
+    cssEntries: projectStructure.cssEntries,
     componentRoots: projectStructure.componentRoots,
     globalRoots: projectStructure.globalRoots,
     namespaceRoots: projectStructure.namespaceRoots,

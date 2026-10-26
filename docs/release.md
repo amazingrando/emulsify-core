@@ -148,6 +148,7 @@ and the branch-protection API readback:
 - `Fixture / wordpress-src-components`
 - `Fixture / legacy-components`
 - `Fixture / structure-implementations`
+- `Fixture / css-style-entries`
 - `Fixture / mixed-storybook`
 - `Fixture / large-twig-storybook`
 - `Packed consumer / whisk-drupal`
@@ -224,6 +225,11 @@ bare and wrong-depth forms:
   self-contained asset copies and repaired bare and wrong-depth CSS URLs.
 - `structure-implementations` verifies custom structure mappings for component
   JavaScript, CSS, Twig, Storybook CSS, foundation assets, and design tokens.
+- `css-style-entries` verifies that, with `styles.cssEntries: true`, plain
+  `.css` component, global, and Storybook styles build to the same output paths
+  as `.scss`, inline `_`-prefixed partial imports, coexist with `.scss`
+  entries, and leave no raw `.css` source copies in `dist/` (only `.min.css`
+  is copied).
 - `mixed-storybook` first verifies that Twig stories using `renderTwig()`,
   React stories, and autonomous custom-element stories build together. It then
   serves that built Storybook in headless Chromium and exercises real

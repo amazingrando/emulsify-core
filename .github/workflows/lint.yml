@@ -124,6 +124,7 @@ jobs:
           - wordpress-src-components
           - legacy-components
           - structure-implementations
+          - css-style-entries
           - mixed-storybook
           - large-twig-storybook
     steps:

@@ -59,7 +59,7 @@ export function copyAllSrcAssetsPlugin({
     plan = [];
 
     for (const file of sourceFileIndex.componentFiles()) {
-      if (!isStaticSourceAsset(file.absPath)) continue;
+      if (!isStaticSourceAsset(file.absPath, structure)) continue;
 
       plan.push({
         absPath: file.absPath,
@@ -68,7 +68,7 @@ export function copyAllSrcAssetsPlugin({
     }
 
     for (const file of sourceFileIndex.globalFiles()) {
-      if (!isStaticSourceAsset(file.absPath)) continue;
+      if (!isStaticSourceAsset(file.absPath, structure)) continue;
       if (findSourceRoot(file.absPath, structure.componentRootRecords))
         continue;
 
