@@ -401,6 +401,46 @@ const releaseFixtures = [
     ],
   },
   {
+    // Plain `.css` entries (styles.cssEntries) land on the paths `.scss` would
+    // use, and no raw `.css` source is copied into dist/ beside them.
+    name: 'css-style-entries',
+    type: 'vite',
+    assert: [
+      'dist/components/card/css/card.css',
+      'dist/components/card/card.twig',
+      'dist/components/card/vendor.min.css',
+      'dist/components/button/css/button.css',
+      'dist/global/base/css/base.css',
+      'dist/storybook/components/card/cl-card.css',
+      'dist/assets/images/canonical.svg',
+    ],
+    reject: [
+      'dist/components/card/card.css',
+      'dist/components/card/_tokens.css',
+      'dist/components/card/cl-card.css',
+      'dist/components/card/css/card.css.css',
+      'dist/components/card/css/_tokens.css',
+      'dist/global/base/base.css',
+    ],
+    assertContent: [
+      {
+        pattern: 'dist/components/card/css/card.css',
+        strings: ['--card-color', '../../../assets/images/canonical.svg'],
+      },
+      {
+        pattern: 'dist/components/button/css/button.css',
+        strings: ['.button'],
+      },
+    ],
+    rejectContent: [
+      {
+        pattern: 'dist/components/card/css/card.css',
+        strings: ['@import', '_tokens.css'],
+      },
+      rejectWrongAssetUrls('dist/components/card/css/card.css'),
+    ],
+  },
+  {
     name: 'mixed-storybook',
     type: 'storybook',
     assert: ['.out/iframe.html'],

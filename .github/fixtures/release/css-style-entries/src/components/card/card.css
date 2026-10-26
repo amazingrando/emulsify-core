@@ -1,0 +1,11 @@
+/* A plain CSS entry: the partial import must be inlined by the build, and the
+   raw source must never be copied beside the compiled output. */
+@import './_tokens.css';
+
+.card {
+  color: var(--card-color);
+}
+
+.asset-canonical {
+  background-image: url('/assets/images/canonical.svg');
+}

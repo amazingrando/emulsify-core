@@ -1,0 +1,10 @@
+{
+  "project": {
+    "platform": "none",
+    "name": "css-style-entries",
+    "machineName": "css_style_entries"
+  },
+  "styles": {
+    "cssEntries": true
+  }
+}

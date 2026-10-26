@@ -9,16 +9,19 @@
  *   - Component assets   -> "components/..." (or mirrored to ./components when Drupal)
  *   - SDC=true removes the injected "/css" or "/js" bucket
  *
+ * Style entries are `.scss` files, plus plain `.css` files when
+ * project.emulsify.json sets `styles.cssEntries: true`.
+ *
  * Component Structure Overrides projects (project.emulsify.json: variant.structureImplementations):
- *   - Only compile JS/SCSS.
+ *   - Only compile JS and style entries.
  *   - JS  -> "js/<relative-without-ext>"
  *   - CSS -> "css/<relative-without-ext>"
  *   - Twig/assets copying is handled by plugins using the same structure model.
- *   - cl-* / sb-* SCSS -> "storybook/<path-without-ext>"
+ *   - cl-* / sb-* styles -> "storybook/<path-without-ext>"
  */
 
 import fs from 'fs';
-import { basename, resolve } from 'path';
+import { basename, relative, resolve } from 'path';
 import {
   compiledAssetOutputPath,
   resolveProjectStructure,
@@ -60,6 +63,17 @@ function safeSetKey(map, key, value) {
   map[key] = value;
 }
 
+/**
+ * Normalize an entry key: POSIX separators, safe characters, no leading slash.
+ * @param {string|null} key
+ * @returns {string} Clean key, or an empty string when nothing usable remains.
+ */
+const cleanKey = (key) =>
+  key ? sanitizePath(toPosixPath(key)).replace(/^\/+/, '') : '';
+
+/** Determine whether a path is a plain `.css` source. */
+const isCssSource = (filePath) => /\.css$/.test(filePath);
+
 /** Return an absolute path from a source index entry or string. */
 const entryPath = (entry) =>
   typeof entry === 'string' ? entry : entry.absPath;
@@ -78,22 +92,50 @@ const isJavaScriptEntry = (entry) => {
   );
 };
 
-/** Determine whether a file should be compiled as a regular SCSS entry. */
-const isScssEntry = (entry) => {
-  const filePath = entryPath(entry);
-  const name = basename(filePath);
-  return (
-    /\.scss$/.test(name) &&
-    !name.startsWith('_') &&
-    !name.startsWith('cl-') &&
-    !name.startsWith('sb-')
-  );
-};
+/**
+ * Build a matcher for compiled stylesheet extensions.
+ *
+ * `.scss` always compiles. Plain `.css` compiles only when the project opts in
+ * through `styles.cssEntries`; pre-minified `.min.css` stays a copied asset
+ * either way.
+ *
+ * @param {boolean} cssEntries - Whether plain `.css` files are entries.
+ * @returns {(name: string) => boolean} Stylesheet name matcher.
+ */
+const styleSourceMatcher = (cssEntries) => (name) =>
+  /\.scss$/.test(name) ||
+  (cssEntries && /\.css$/.test(name) && !/\.min\.css$/.test(name));
 
-/** Determine whether a file should be emitted under the Storybook style path. */
-const isStorybookScssEntry = (entry) => {
-  const filePath = entryPath(entry);
-  return /\.scss$/.test(filePath) && /(?:cl-|sb-)/.test(basename(filePath));
+/**
+ * Build the regular and Storybook style entry predicates for a project.
+ *
+ * Partials (`_name`) are import-only. `cl-`/`sb-` prefixed styles are
+ * component-library styles emitted under the Storybook output path.
+ *
+ * @param {{cssEntries?: boolean}} structure - Resolved project structure.
+ * @returns {{
+ *   isStyleEntry: (entry: object|string) => boolean,
+ *   isStorybookStyleEntry: (entry: object|string) => boolean
+ * }} Style entry predicates.
+ */
+const createStyleEntryMatchers = (structure) => {
+  const isStyleSource = styleSourceMatcher(structure.cssEntries === true);
+
+  return {
+    isStyleEntry: (entry) => {
+      const name = basename(entryPath(entry));
+      return (
+        isStyleSource(name) &&
+        !name.startsWith('_') &&
+        !name.startsWith('cl-') &&
+        !name.startsWith('sb-')
+      );
+    },
+    isStorybookStyleEntry: (entry) => {
+      const name = basename(entryPath(entry));
+      return isStyleSource(name) && /(?:cl-|sb-)/.test(name);
+    },
+  };
 };
 
 /* -------------------------------------------------------------------------- */
@@ -118,8 +160,17 @@ export function buildInputs(ctx) {
   const sourceFileIndex =
     ctx.sourceFileIndex || createSourceFileIndex(structure);
 
+  const { isStyleEntry, isStorybookStyleEntry } =
+    createStyleEntryMatchers(structure);
+
   /** @type {Record<string, string>} */
   const inputs = {};
+
+  /**
+   * Style sources already claimed per entry key.
+   * @type {Map<string, string>}
+   */
+  const styleKeys = new Map();
 
   /**
    * Add a key/file pair into the inputs map safely (sanitized + POSIX).
@@ -127,21 +178,48 @@ export function buildInputs(ctx) {
    * @param {string} abs
    */
   const add = (key, abs) => {
-    if (!key) return;
-    const clean = sanitizePath(toPosixPath(key)).replace(/^\/+/, '');
+    const clean = cleanKey(key);
     if (!clean) return;
     safeSetKey(inputs, clean, abs);
+  };
+
+  /**
+   * Add a style entry, refusing to let `.css` and `.scss` share an output.
+   *
+   * `name.scss` and `name.css` beside each other resolve to the same output
+   * key, so one would silently replace the other in `dist/`. Only pairs that
+   * involve a `.css` source are rejected; that is reachable solely with
+   * `styles.cssEntries` on, so SCSS-only projects keep their existing behavior.
+   *
+   * @param {string|null} key
+   * @param {string} abs
+   * @throws {Error} When a `.css` and another style source share a key.
+   */
+  const addStyle = (key, abs) => {
+    const clean = cleanKey(key);
+    if (!clean) return;
+    const previous = styleKeys.get(clean);
+    if (previous && previous !== abs && [previous, abs].some(isCssSource)) {
+      const [first, second] = [previous, abs]
+        .map((file) => toPosixPath(relative(ctx.projectDir || '', file)))
+        .sort();
+      throw new Error(
+        `Emulsify style entries ${first} and ${second} both compile to "${clean}.css". Rename or remove one of them.`,
+      );
+    }
+    styleKeys.set(clean, abs);
+    add(clean, abs);
   };
 
   /* ------------------------------------------------------------------------ */
   /* STRUCTURE OVERRIDES BRANCH                                               */
   /* ------------------------------------------------------------------------ */
   if (structure.structureOverrides) {
-    // Gather JS and SCSS from each declared variant root directory.
+    // Gather JS and styles from each declared variant root directory.
     const componentFiles = sourceFileIndex.componentFiles();
     const jsFiles = componentFiles.filter(isJavaScriptEntry);
-    const scssFiles = componentFiles.filter(isScssEntry);
-    const storybookScss = componentFiles.filter(isStorybookScssEntry);
+    const styleFiles = componentFiles.filter(isStyleEntry);
+    const storybookStyles = componentFiles.filter(isStorybookStyleEntry);
 
     // JS files emit under dist/js using the path below components when possible.
     for (const entry of jsFiles) {
@@ -149,16 +227,16 @@ export function buildInputs(ctx) {
       add(compiledAssetOutputPath(file, 'js', structure, ctx), file);
     }
 
-    // SCSS files emit under dist/css using the same relative path rules.
-    for (const entry of scssFiles) {
+    // Style files emit under dist/css using the same relative path rules.
+    for (const entry of styleFiles) {
       const file = entryPath(entry);
-      add(compiledAssetOutputPath(file, 'css', structure, ctx), file);
+      addStyle(compiledAssetOutputPath(file, 'css', structure, ctx), file);
     }
 
     // Storybook and component-library styles stay under dist/storybook.
-    for (const entry of storybookScss) {
+    for (const entry of storybookStyles) {
       const file = entryPath(entry);
-      add(storybookStyleOutputPath(file, structure, ctx), file);
+      addStyle(storybookStyleOutputPath(file, structure, ctx), file);
     }
 
     return inputs;
@@ -182,22 +260,22 @@ export function buildInputs(ctx) {
     add(compiledAssetOutputPath(file, 'js', structure, ctx), file);
   }
 
-  // Global SCSS
-  for (const entry of globalFiles.filter(isScssEntry)) {
+  // Global styles
+  for (const entry of globalFiles.filter(isStyleEntry)) {
     const file = entryPath(entry);
-    add(compiledAssetOutputPath(file, 'css', structure, ctx), file);
+    addStyle(compiledAssetOutputPath(file, 'css', structure, ctx), file);
   }
 
-  // Component SCSS
-  for (const entry of componentFiles.filter(isScssEntry)) {
+  // Component styles
+  for (const entry of componentFiles.filter(isStyleEntry)) {
     const file = entryPath(entry);
-    add(compiledAssetOutputPath(file, 'css', structure, ctx), file);
+    addStyle(compiledAssetOutputPath(file, 'css', structure, ctx), file);
   }
 
-  // Storybook/CL SCSS
-  for (const entry of sourceFileIndex.all().filter(isStorybookScssEntry)) {
+  // Storybook/CL styles
+  for (const entry of sourceFileIndex.all().filter(isStorybookStyleEntry)) {
     const file = entryPath(entry);
-    add(storybookStyleOutputPath(file, structure, ctx), file);
+    addStyle(storybookStyleOutputPath(file, structure, ctx), file);
   }
 
   return inputs;

@@ -20,7 +20,7 @@
 import { readFileSync } from 'node:fs';
 import { basename, dirname, posix, relative, resolve } from 'node:path';
 
-import { walkFiles } from '../assets/source-file-index.js';
+import { isSameOrInsideDir, walkFiles } from '../assets/source-file-index.js';
 
 /**
  * Directories worth skipping on top of the shared defaults.
@@ -46,6 +46,32 @@ const URL_CALL = /url\(\s*(['"]?)([^'")]+)\1\s*\)/g;
  * @type {RegExp}
  */
 const AUTHORED_STYLESHEET = /\.(scss|sass)$/i;
+
+/**
+ * Plain stylesheets that may be authored when `styles.cssEntries` is on.
+ *
+ * @type {RegExp}
+ */
+const AUTHORED_CSS = /(?<!\.min)\.css$/i;
+
+/**
+ * Build the predicate for stylesheets a human actually edits.
+ *
+ * With `styles.cssEntries` on, plain `.css` inside a source root is authored
+ * too. Restricting it to source roots keeps compiled CSS that Drupal themes
+ * mirror back to the project root out of the authored tier.
+ *
+ * @param {{cssEntries?: boolean, sourceRoots?: string[]}} [structure] - Resolved project structure.
+ * @returns {(filePath: string) => boolean} Authored stylesheet predicate.
+ */
+const authoredStylesheetMatcher = ({ cssEntries, sourceRoots = [] } = {}) => {
+  if (!cssEntries) return (filePath) => AUTHORED_STYLESHEET.test(filePath);
+
+  return (filePath) =>
+    AUTHORED_STYLESHEET.test(filePath) ||
+    (AUTHORED_CSS.test(filePath) &&
+      sourceRoots.some((root) => isSameOrInsideDir(dirname(filePath), root)));
+};
 
 /**
  * Any stylesheet, including compiled output.
@@ -94,13 +120,18 @@ const lineAt = (source, index) => source.slice(0, index).split('\n').length;
 /**
  * Create a resolver for unresolved CSS asset URLs.
  *
- * @param {{projectDir?: string}} env - Project environment.
+ * @param {{projectDir?: string, projectStructure?: object}} env - Project environment.
  * @returns {{
  *   locate: (url: string) => {status: string, label: string},
  *   references: (url: string) => Array<{file: string, sourceFile: string, line: number}>
  * }} Resolver.
  */
-export function createAssetResolver({ projectDir = '' } = {}) {
+export function createAssetResolver({
+  projectDir = '',
+  projectStructure,
+} = {}) {
+  const isAuthoredStylesheet = authoredStylesheetMatcher(projectStructure);
+
   // Deliberately not `sourceFileIndex`. That index only covers component and
   // global *source* roots, so a theme keeping its images in a project-root
   // `assets/` directory — the Emulsify default — has none of them indexed, and
@@ -222,7 +253,7 @@ export function createAssetResolver({ projectDir = '' } = {}) {
       const found = [];
 
       for (const absPath of allFiles()) {
-        if (!AUTHORED_STYLESHEET.test(absPath)) continue;
+        if (!isAuthoredStylesheet(absPath)) continue;
 
         const source = read(absPath);
         if (!source || !source.includes(literal)) continue;
@@ -330,7 +361,7 @@ export function createAssetResolver({ projectDir = '' } = {}) {
       // the project root keep generated CSS beside their source, and a match
       // there points at a one-line build artifact nobody can usefully edit.
       const searchOrder = [
-        files.filter((file) => AUTHORED_STYLESHEET.test(file)),
+        files.filter(isAuthoredStylesheet),
         files.filter((file) => ANY_STYLESHEET.test(file)),
       ];
 

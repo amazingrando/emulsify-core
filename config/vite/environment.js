@@ -12,6 +12,7 @@
  *  - `assetRoots`: array of directories from safe `assets.roots` config.
  *  - `assetRebase`: whether unresolved CSS asset URLs are repaired.
  *  - `selfContainedOutput`: whether project assets remain under `dist/assets`.
+ *  - `cssEntries`: whether plain `.css` files compile as style entries.
  *  - `platformAdapter`: active adapter for platform-specific behavior.
  */
 
@@ -32,6 +33,7 @@ import { resolveProjectConfig } from './project-config.js';
  *   assetRoots: string[],
  *   assetRebase: boolean,
  *   selfContainedOutput: boolean,
+ *   cssEntries: boolean,
  *   componentRoots: string[],
  *   globalRoots: string[],
  *   namespaceRoots: Record<string, string>,

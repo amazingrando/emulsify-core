@@ -84,6 +84,45 @@ describe('source copy plugins', () => {
     expect(existsSync(join(outDir, 'components/card/Card.php'))).toBe(false);
   });
 
+  it.each([
+    [false, true],
+    [true, false],
+  ])(
+    'with styles.cssEntries=%s, copies raw CSS sources: %s',
+    (cssEntries, copiesRawCss) => {
+      projectDir = makeTempProject();
+      const componentDir = join(projectDir, 'src/components/card');
+      const globalDir = join(projectDir, 'src/base');
+      const outDir = join(projectDir, 'dist');
+      mkdirSync(componentDir, { recursive: true });
+      mkdirSync(globalDir, { recursive: true });
+      writeFileSync(join(componentDir, 'card.css'), '.card {}');
+      writeFileSync(join(componentDir, '_theme.css'), '@theme {}');
+      writeFileSync(join(componentDir, 'vendor.min.css'), '.v{}');
+      writeFileSync(join(globalDir, 'base.css'), 'body {}');
+
+      const structure = resolveProjectStructure(
+        makeEnv(projectDir, { cssEntries }),
+      );
+
+      runCopyPlugins(structure, outDir);
+
+      expect(existsSync(join(outDir, 'components/card/card.css'))).toBe(
+        copiesRawCss,
+      );
+      expect(existsSync(join(outDir, 'components/card/_theme.css'))).toBe(
+        copiesRawCss,
+      );
+      expect(existsSync(join(outDir, 'global/base/base.css'))).toBe(
+        copiesRawCss,
+      );
+      // Pre-minified CSS is never an entry, so it always ships as an asset.
+      expect(existsSync(join(outDir, 'components/card/vendor.min.css'))).toBe(
+        true,
+      );
+    },
+  );
+
   it('records only copied files whose bytes were written this cycle', () => {
     projectDir = makeTempProject();
     const componentDir = join(projectDir, 'src/components/card');

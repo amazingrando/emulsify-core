@@ -99,7 +99,9 @@ Create a CSS file that imports Tailwind. This example places it under `src/globa
 
 The `@source` lines are optional when Tailwind's automatic detection already sees the right files, but they make multi-root Emulsify projects explicit. Use `../components` for `src/components`, `../../components` for root `./components`, and add one line for each `variant.structureImplementations` root that should be scanned. Keep `@source` paths focused on active component source directories so Tailwind does not scan generated output, archived templates, or dependency folders.
 
-For production builds, import the Tailwind CSS file from a discovered JavaScript entry:
+For production builds, either import the Tailwind CSS file from a discovered JavaScript entry, or enable [plain CSS style entries](project-structure.md#plain-css-style-entries) so the CSS file compiles as an entry itself.
+
+Without `styles.cssEntries`, import it from a JavaScript entry:
 
 ```js
 // src/global/tailwind.js
@@ -114,6 +116,19 @@ import '../../../src/global/tailwind.css';
 
 export const parameters = {};
 ```
+
+With `styles.cssEntries: true` in `project.emulsify.json`, the JavaScript import is unnecessary: `src/global/tailwind.css` compiles to the global CSS output like any other style entry, and component styles can be authored as plain `.css` that uses Tailwind directly:
+
+```css
+/* src/components/button/button.css */
+@reference '../../global/tailwind.css';
+
+.button {
+  @apply rounded px-4 py-2 font-semibold;
+}
+```
+
+`button.css` builds to the same path `button.scss` would. Keep shared Tailwind setup that should not ship on its own, such as a theme file pulled in with `@reference` or `@import`, in a `_`-prefixed partial such as `_theme.css`; partials are neither compiled nor copied. Do not keep the JavaScript import as well, or the Tailwind CSS is emitted twice.
 
 Tailwind detects complete class names in Twig, React, and other templates. Avoid constructing utility class fragments dynamically, such as `text-${color}-600`; map variants to complete class strings instead.
 

@@ -164,6 +164,47 @@ asset copies remain under `dist/assets/` regardless of `selfContainedOutput`.
 See
 [Asset References](asset-references.md#why-a-relative-path-is-not-portable).
 
+### Plain CSS Style Entries
+
+Style entries are `.scss` files by default. Set `styles.cssEntries` to `true`
+to also compile plain `.css` files as style entries:
+
+```json
+{
+  "project": {
+    "platform": "none",
+    "name": "example",
+    "machineName": "example"
+  },
+  "styles": {
+    "cssEntries": true
+  }
+}
+```
+
+With the option on, a `.css` file follows the same entry rules as `.scss`:
+
+- `card.css` builds to the same output path `card.scss` would, for every
+  project shape in the [output path matrix](#output-path-matrix).
+- `_`-prefixed `.css` files are import-only partials. They are not compiled on
+  their own and are not copied to the output.
+- `cl-*` and `sb-*` `.css` files are routed to Storybook output paths.
+- Pre-minified `.min.css` files are not entries; they are still copied as
+  static assets.
+- No other `.css` source is copied verbatim into the output, so Storybook's
+  `dist/**/*.css` loading only sees compiled CSS.
+
+A component cannot have both `name.scss` and `name.css` with the option on.
+Both would compile to the same output file, so the build fails and names the
+two sources instead of letting one silently replace the other.
+
+The option is off by default in 4.x because existing projects may keep raw
+`.css` in source roots and rely on it being copied to the output unchanged.
+Projects that enable it should rename any such files to `.min.css` or move them
+to an asset root. Plain `.css` entries go through Vite's CSS pipeline, so
+PostCSS config and Vite CSS plugins such as `@tailwindcss/vite` apply to them;
+see [Tailwind CSS](extension-points.md#tailwind-css).
+
 ## Story Roots
 
 Stories remain colocated with components. Storybook discovers stories from the normalized source roots regardless of whether a project uses:
@@ -204,7 +245,7 @@ The Vite outDir is `dist/` unless a platform adapter performs additional work af
 
 Emulsify Core preserves current exclusion behavior for build inputs:
 
-- Partial Sass files are not direct build entries.
+- Partial Sass files are not direct build entries. With `styles.cssEntries`, the same applies to `_`-prefixed `.css` files.
 - Stories are not compiled as production component assets.
 - Component metadata is copied, not compiled.
 - Minified files are excluded from entry generation.
@@ -213,6 +254,7 @@ Emulsify Core preserves current exclusion behavior for build inputs:
 - JavaScript/TypeScript source extensions are excluded from static asset copying.
 - PHP/Drupal source extensions listed above are excluded from static asset copying and its build watch list.
 - `cl-*` and `sb-*` Storybook styles are routed to Storybook output paths.
+- `.scss` files are excluded from static asset copying. With `styles.cssEntries`, `.css` files other than `.min.css` are also excluded, because they compile instead.
 
 Asset copying and entry generation both consume the normalized project structure model so roots, namespaces, and output paths stay aligned.
 

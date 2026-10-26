@@ -59,6 +59,7 @@ const buildContext = (
     structureImplementations = [],
     componentFilePaths = [],
     globalFilePaths = [],
+    cssEntries = false,
   } = {},
 ) => {
   const srcDir = srcExists
@@ -76,6 +77,7 @@ const buildContext = (
     srcExists,
     SDC,
     structureImplementations: absoluteStructureImplementations,
+    cssEntries,
   });
   const componentFiles = componentFilePaths.map((relPath) =>
     sourceEntry(
@@ -286,4 +288,135 @@ describe('buildInputs structure outputs', () => {
 }
 `);
   });
+});
+
+describe('buildInputs CSS style entries', () => {
+  let projectDir;
+
+  afterEach(() => {
+    if (projectDir) {
+      rmSync(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  const cssComponentFiles = [
+    'src/components/card/card.js',
+    'src/components/card/card.css',
+    'src/components/card/_theme.css',
+    'src/components/card/card.min.css',
+    'src/components/card/cl-card.css',
+  ];
+
+  it('ignores plain CSS unless styles.cssEntries is enabled', () => {
+    projectDir = makeTempProject();
+    const ctx = buildContext(projectDir, {
+      componentFilePaths: cssComponentFiles,
+      globalFilePaths: ['src/base/base.css'],
+    });
+
+    expect(buildRelativeInputs(ctx)).toMatchInlineSnapshot(`
+{
+  "components/card/js/card": "src/components/card/card.js",
+}
+`);
+  });
+
+  it('builds CSS entries with the same keys SCSS would use', () => {
+    projectDir = makeTempProject();
+    const ctx = buildContext(projectDir, {
+      cssEntries: true,
+      componentFilePaths: cssComponentFiles,
+      globalFilePaths: ['src/base/base.css'],
+    });
+
+    expect(buildRelativeInputs(ctx)).toMatchInlineSnapshot(`
+{
+  "components/card/css/card": "src/components/card/card.css",
+  "components/card/js/card": "src/components/card/card.js",
+  "global/base/css/base": "src/base/base.css",
+  "storybook/components/card/cl-card": "src/components/card/cl-card.css",
+}
+`);
+  });
+
+  it('builds CSS entries with Drupal SDC output keys', () => {
+    projectDir = makeTempProject();
+    const ctx = buildContext(projectDir, {
+      platform: 'drupal',
+      SDC: true,
+      cssEntries: true,
+      componentFilePaths: [
+        'src/components/card/card.js',
+        'src/components/card/card.css',
+      ],
+    });
+
+    expect(buildRelativeInputs(ctx)).toMatchInlineSnapshot(`
+{
+  "components/card/card": "src/components/card/card.js",
+  "components/card/card__style": "src/components/card/card.css",
+}
+`);
+  });
+
+  it('builds CSS entries for structureImplementation projects', () => {
+    projectDir = makeTempProject();
+    const ctx = buildContext(projectDir, {
+      cssEntries: true,
+      structureImplementations: [
+        { name: 'components', directory: 'src/components' },
+        { name: 'layout', directory: 'src/layout' },
+      ],
+      componentFilePaths: [
+        'src/components/button/button.css',
+        'src/layout/grid/grid.css',
+        'src/layout/grid/sb-grid.css',
+      ],
+    });
+
+    expect(buildRelativeInputs(ctx)).toMatchInlineSnapshot(`
+{
+  "css/button/button": "src/components/button/button.css",
+  "css/src/layout/grid/grid": "src/layout/grid/grid.css",
+  "storybook/src/layout/grid/sb-grid": "src/layout/grid/sb-grid.css",
+}
+`);
+  });
+
+  it('keeps SCSS and CSS entries side by side when their outputs differ', () => {
+    projectDir = makeTempProject();
+    const ctx = buildContext(projectDir, {
+      cssEntries: true,
+      componentFilePaths: [
+        'src/components/card/card.scss',
+        'src/components/button/button.css',
+      ],
+    });
+
+    expect(buildRelativeInputs(ctx)).toMatchInlineSnapshot(`
+{
+  "components/button/css/button": "src/components/button/button.css",
+  "components/card/css/card": "src/components/card/card.scss",
+}
+`);
+  });
+
+  it.each([
+    ['component', 'src/components/card/card', 'componentFilePaths'],
+    ['global', 'src/base/base', 'globalFilePaths'],
+    ['Storybook', 'src/components/card/cl-card', 'componentFilePaths'],
+  ])(
+    'fails when a %s style has both .scss and .css sources',
+    (_label, stem, option) => {
+      projectDir = makeTempProject();
+      const ctx = buildContext(projectDir, {
+        cssEntries: true,
+        [option]: [`${stem}.scss`, `${stem}.css`],
+      });
+
+      expect(() => buildInputs(ctx)).toThrow(
+        `${stem}.css and ${stem}.scss both compile to`,
+      );
+    },
+  );
 });

@@ -85,13 +85,21 @@ export const isComponentMetadataFile = (filePath) =>
  * Server-side and uncompiled module sources can share roots with static assets
  * without being published by this pass. Unknown non-code extensions still copy.
  *
+ * With `styles.cssEntries` on, plain `.css` is source rather than a static
+ * asset: entries compile to the same path a raw copy would land on, and
+ * partials (often Tailwind `@reference` files) must not reach `dist/`, where
+ * Storybook loads every stylesheet. Pre-minified `.min.css` still copies.
+ *
  * @param {string} filePath - Absolute or relative file path.
+ * @param {{cssEntries?: boolean}} [structure] - Resolved project structure.
  * @returns {boolean} TRUE for non-code source assets.
  */
-export const isStaticSourceAsset = (filePath) =>
+export const isStaticSourceAsset = (filePath, { cssEntries = false } = {}) =>
   !/\.([cm]?[jt]sx?|scss|twig|map|php\d?|phtml|inc|module|theme|install|profile|engine)$/i.test(
     filePath,
-  ) && !isComponentMetadataFile(filePath);
+  ) &&
+  !isComponentMetadataFile(filePath) &&
+  !(cssEntries && /\.css$/.test(filePath) && !/\.min\.css$/.test(filePath));
 
 /**
  * Build the roots that should not be crawled during a global source pass.
